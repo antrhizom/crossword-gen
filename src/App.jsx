@@ -595,7 +595,7 @@ export default function App() {
                     className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
                   >
                     <Trash2 className="w-5 h-5" />
-                  button>
+                  </button>
                 )}
               </div>
             ))}
