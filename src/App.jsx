@@ -1,12 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { Share2, Plus, Trash2, Grid, Play } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Share2, Plus, Trash2, Grid, Play, Download, FileText, Image as ImageIcon } from 'lucide-react';
 
 export default function App() {
   const [words, setWords] = useState([{ word: '', clue: '' }]);
+  const [bulkInput, setBulkInput] = useState('');
+  const [showBulkInput, setShowBulkInput] = useState(false);
   const [puzzle, setPuzzle] = useState(null);
   const [userAnswers, setUserAnswers] = useState({});
   const [mode, setMode] = useState('create'); // 'create', 'solve'
   const [shareLink, setShareLink] = useState('');
+  const puzzleRef = useRef(null);
+  const inputRefs = useRef({});
 
   // Load puzzle from URL on mount
   useEffect(() => {
@@ -22,6 +26,26 @@ export default function App() {
       }
     }
   }, []);
+
+  const parseBulkInput = () => {
+    const parts = bulkInput.split(',').map(s => s.trim()).filter(s => s);
+    if (parts.length < 2 || parts.length % 2 !== 0) {
+      alert('Bitte gib die Wörter und Hinweise im Format ein: WORT1, Hinweis 1, WORT2, Hinweis 2, ...');
+      return;
+    }
+
+    const newWords = [];
+    for (let i = 0; i < parts.length; i += 2) {
+      newWords.push({
+        word: parts[i].toUpperCase(),
+        clue: parts[i + 1]
+      });
+    }
+
+    setWords(newWords);
+    setBulkInput('');
+    setShowBulkInput(false);
+  };
 
   const addWord = () => {
     setWords([...words, { word: '', clue: '' }]);
@@ -228,9 +252,59 @@ export default function App() {
     return { grid: trimmedGrid, words: adjustedWords };
   };
 
-  const handleCellChange = (wordIndex, letterIndex, value) => {
+  const handleCellChange = (wordIndex, letterIndex, rowIdx, colIdx, value) => {
     const key = `${wordIndex}-${letterIndex}`;
     setUserAnswers({ ...userAnswers, [key]: value.toUpperCase() });
+
+    // Auto-focus next cell
+    if (value) {
+      const nextCol = colIdx + 1;
+      const nextRow = rowIdx;
+      const nextKey = `${nextRow}-${nextCol}`;
+      
+      if (inputRefs.current[nextKey]) {
+        inputRefs.current[nextKey].focus();
+      } else {
+        // Try next row
+        const nextRowKey = `${nextRow + 1}-0`;
+        if (inputRefs.current[nextRowKey]) {
+          inputRefs.current[nextRowKey].focus();
+        }
+      }
+    }
+  };
+
+  const handleKeyDown = (e, rowIdx, colIdx) => {
+    const currentKey = `${rowIdx}-${colIdx}`;
+    let targetKey = null;
+
+    switch(e.key) {
+      case 'ArrowRight':
+        e.preventDefault();
+        targetKey = `${rowIdx}-${colIdx + 1}`;
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        targetKey = `${rowIdx}-${colIdx - 1}`;
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        targetKey = `${rowIdx + 1}-${colIdx}`;
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        targetKey = `${rowIdx - 1}-${colIdx}`;
+        break;
+      case 'Backspace':
+        if (!userAnswers[`${rowIdx}-${colIdx}`]) {
+          targetKey = `${rowIdx}-${colIdx - 1}`;
+        }
+        break;
+    }
+
+    if (targetKey && inputRefs.current[targetKey]) {
+      inputRefs.current[targetKey].focus();
+    }
   };
 
   const checkAnswers = () => {
@@ -258,6 +332,54 @@ export default function App() {
     alert('Link wurde in die Zwischenablage kopiert!');
   };
 
+  const exportAsPNG = async () => {
+    if (!puzzleRef.current) return;
+
+    try {
+      // Dynamically import html2canvas
+      const html2canvas = (await import('html2canvas')).default;
+      
+      const canvas = await html2canvas(puzzleRef.current, {
+        backgroundColor: '#ffffff',
+        scale: 2
+      });
+      
+      const link = document.createElement('a');
+      link.download = 'kreuzwortraetsel.png';
+      link.href = canvas.toDataURL();
+      link.click();
+    } catch (error) {
+      alert('Fehler beim Exportieren. Bitte installiere html2canvas: npm install html2canvas');
+    }
+  };
+
+  const exportAsPDF = async () => {
+    if (!puzzleRef.current) return;
+
+    try {
+      // Dynamically import html2canvas and jspdf
+      const html2canvas = (await import('html2canvas')).default;
+      const { jsPDF } = await import('jspdf');
+      
+      const canvas = await html2canvas(puzzleRef.current, {
+        backgroundColor: '#ffffff',
+        scale: 2
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
+        unit: 'px',
+        format: [canvas.width, canvas.height]
+      });
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+      pdf.save('kreuzwortraetsel.pdf');
+    } catch (error) {
+      alert('Fehler beim Exportieren. Bitte installiere: npm install html2canvas jspdf');
+    }
+  };
+
   const resetToCreate = () => {
     setMode('create');
     setPuzzle(null);
@@ -270,16 +392,30 @@ export default function App() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
         <div className="max-w-6xl mx-auto">
-          <div className="bg-white rounded-lg shadow-xl p-8">
+          <div className="bg-white rounded-lg shadow-xl p-8" ref={puzzleRef}>
             <div className="flex justify-between items-center mb-8">
               <h1 className="text-3xl font-bold text-gray-800">Kreuzworträtsel</h1>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={checkAnswers}
                   className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
                 >
                   <Play className="w-4 h-4" />
                   Prüfen
+                </button>
+                <button
+                  onClick={exportAsPNG}
+                  className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                >
+                  <ImageIcon className="w-4 h-4" />
+                  Als Bild
+                </button>
+                <button
+                  onClick={exportAsPDF}
+                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  Als PDF
                 </button>
                 <button
                   onClick={generateShareLink}
@@ -325,6 +461,7 @@ export default function App() {
                         }
 
                         const key = `${wordIndex}-${letterIndex}`;
+                        const cellKey = `${rowIdx}-${colIdx}`;
 
                         return (
                           <div
@@ -340,11 +477,13 @@ export default function App() {
                             )}
                             {cell !== null && (
                               <input
+                                ref={el => inputRefs.current[cellKey] = el}
                                 type="text"
                                 maxLength={1}
                                 value={userAnswers[key] || ''}
-                                onChange={(e) => handleCellChange(wordIndex, letterIndex, e.target.value)}
-                                className="w-full h-full text-center font-bold text-lg uppercase border-none outline-none focus:bg-blue-50"
+                                onChange={(e) => handleCellChange(wordIndex, letterIndex, rowIdx, colIdx, e.target.value)}
+                                onKeyDown={(e) => handleKeyDown(e, rowIdx, colIdx)}
+                                className="w-full h-full text-center font-bold text-lg uppercase border-none outline-none focus:bg-blue-50 focus:ring-2 focus:ring-blue-400"
                               />
                             )}
                           </div>
@@ -395,6 +534,40 @@ export default function App() {
           </h1>
           <p className="text-gray-600 mb-8">Erstelle dein eigenes Kreuzworträtsel zum Teilen!</p>
 
+          {/* Bulk Input Section */}
+          <div className="mb-6">
+            <button
+              onClick={() => setShowBulkInput(!showBulkInput)}
+              className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg mb-3 flex items-center gap-2"
+            >
+              <FileText className="w-4 h-4" />
+              {showBulkInput ? 'Einzeleingabe' : 'Mehrere Wörter auf einmal'}
+            </button>
+
+            {showBulkInput && (
+              <div className="bg-indigo-50 p-4 rounded-lg mb-4">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Wörter und Hinweise (komma-getrennt):
+                </label>
+                <textarea
+                  value={bulkInput}
+                  onChange={(e) => setBulkInput(e.target.value)}
+                  placeholder="KATZE, Haustier mit vier Pfoten, HUND, Bester Freund des Menschen, VOGEL, Kann fliegen"
+                  className="w-full h-32 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-600 mt-2 mb-3">
+                  Format: WORT1, Hinweis 1, WORT2, Hinweis 2, WORT3, Hinweis 3, ...
+                </p>
+                <button
+                  onClick={parseBulkInput}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-semibold"
+                >
+                  Wörter übernehmen
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="space-y-4 mb-6">
             {words.map((word, index) => (
               <div key={index} className="flex gap-2 items-start">
@@ -422,7 +595,7 @@ export default function App() {
                     className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
                   >
                     <Trash2 className="w-5 h-5" />
-                  </button>
+                  button>
                 )}
               </div>
             ))}
@@ -448,10 +621,10 @@ export default function App() {
           <div className="mt-8 p-4 bg-blue-50 rounded-lg">
             <h3 className="font-semibold text-blue-900 mb-2">💡 Tipps:</h3>
             <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Gib mindestens 2 Wörter ein (je mehr, desto besser!)</li>
+              <li>• Nutze "Mehrere Wörter auf einmal" für schnelle Eingabe</li>
               <li>• Wörter sollten mindestens 2 Buchstaben lang sein</li>
-              <li>• Der Algorithmus versucht, die Wörter intelligent zu verknüpfen</li>
-              <li>• Nach dem Erstellen kannst du einen Link zum Teilen generieren</li>
+              <li>• Beim Lösen: Nutze Pfeiltasten zur Navigation</li>
+              <li>• Exportiere als PDF oder Bild für Word/Druck</li>
             </ul>
           </div>
         </div>

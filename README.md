@@ -5,10 +5,14 @@ Ein interaktiver Kreuzworträtsel-Generator, mit dem du eigene Kreuzworträtsel 
 ## ✨ Features
 
 - 🎨 **Wörter eingeben**: Beliebig viele Wörter mit Hinweisen hinzufügen
+- 📝 **Bulk-Eingabe**: Mehrere Wörter auf einmal per komma-getrenntem Text einfügen
 - 🧩 **Automatische Generierung**: Intelligenter Algorithmus platziert Wörter und verknüpft sie
+- ⌨️ **Smarte Navigation**: Pfeiltasten und automatischer Fokus beim Lösen
 - 🔗 **Link-Sharing**: Erstelle einen teilbaren Link für dein Rätsel
 - ✏️ **Interaktives Lösen**: Rätsel direkt im Browser ausfüllen
 - ✅ **Lösung prüfen**: Sofortiges Feedback zu richtigen/falschen Antworten
+- 📄 **PDF-Export**: Kreuzworträtsel als PDF herunterladen
+- 🖼️ **Bild-Export**: Als PNG speichern für Word/PowerPoint
 - 📱 **Responsive Design**: Funktioniert auf Desktop und Mobilgeräten
 
 ## 🚀 Installation & Start
@@ -125,11 +129,26 @@ jobs:
 
 ## 📖 Verwendung
 
-1. **Wörter eingeben**: Gib mindestens 2 Wörter mit Hinweisen ein
-2. **Rätsel erstellen**: Klicke auf "Kreuzworträtsel erstellen"
-3. **Lösen**: Fülle die Buchstaben in die Felder ein
-4. **Prüfen**: Klicke auf "Prüfen" um deine Lösung zu überprüfen
-5. **Teilen**: Klicke auf "Teilen" um einen Link zu generieren
+### Einzeleingabe:
+1. **Wörter eingeben**: Gib Wörter einzeln mit Hinweisen ein
+2. **Weitere Wörter**: Klicke auf "Wort hinzufügen" für mehr Felder
+
+### Bulk-Eingabe (Schneller!):
+1. Klicke auf **"Mehrere Wörter auf einmal"**
+2. Füge deine Wörter im Format ein: `KATZE, Haustier, HUND, Bester Freund, VOGEL, Kann fliegen`
+3. Klicke auf **"Wörter übernehmen"**
+
+### Rätsel erstellen & lösen:
+1. Klicke auf **"Kreuzworträtsel erstellen"**
+2. **Lösen**: Fülle die Buchstaben ein
+   - Nutze **Pfeiltasten** zur Navigation
+   - Felder springen automatisch weiter
+3. **Prüfen**: Klicke auf "Prüfen" um deine Lösung zu überprüfen
+
+### Export & Teilen:
+- **Als PDF**: Perfekt zum Ausdrucken
+- **Als Bild**: Zum Einfügen in Word/PowerPoint
+- **Teilen**: Link generieren und kopieren
 
 ## 🛠️ Technologien
 
@@ -137,6 +156,8 @@ jobs:
 - Vite
 - Tailwind CSS
 - Lucide React (Icons)
+- html2canvas (Bild-Export)
+- jsPDF (PDF-Export)
 
 ## 📝 Lizenz
 
