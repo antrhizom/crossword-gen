@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Share2, Plus, Trash2, Grid, Play, Download, FileText, Image as ImageIcon } from 'lucide-react';
+import { Share2, Plus, Trash2, Grid, Play, Download, FileText, Image as ImageIcon, Shuffle } from 'lucide-react';
 
 export default function App() {
   const [words, setWords] = useState([{ word: '', clue: '' }]);
@@ -75,8 +75,31 @@ export default function App() {
       setPuzzle(grid);
       setMode('solve');
       setUserAnswers({});
+      setCheckedAnswers({});
     } else {
       alert('Kreuzworträtsel konnte nicht erstellt werden. Versuche andere Wörter!');
+    }
+  };
+
+  const rearrangePuzzle = () => {
+    if (!puzzle) return;
+    
+    // Extract original words from puzzle
+    const originalWords = puzzle.words.map(w => ({
+      word: w.word,
+      clue: w.clue
+    }));
+    
+    // Shuffle the order slightly to get different arrangement
+    const shuffled = [...originalWords].sort(() => Math.random() - 0.5);
+    
+    const grid = createCrossword(shuffled);
+    if (grid) {
+      setPuzzle(grid);
+      setUserAnswers({});
+      setCheckedAnswers({});
+    } else {
+      alert('Konnte keine neue Anordnung erstellen. Versuche es nochmal!');
     }
   };
 
@@ -436,6 +459,13 @@ export default function App() {
                 >
                   <Play className="w-4 h-4" />
                   Prüfen
+                </button>
+                <button
+                  onClick={rearrangePuzzle}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                >
+                  <Shuffle className="w-4 h-4" />
+                  Neu anordnen
                 </button>
                 <button
                   onClick={exportAsPNG}
