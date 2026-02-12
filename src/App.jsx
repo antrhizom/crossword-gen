@@ -9,6 +9,8 @@ export default function App() {
   const [userAnswers, setUserAnswers] = useState({});
   const [mode, setMode] = useState('create'); // 'create', 'solve'
   const [shareLink, setShareLink] = useState('');
+  const [checkedAnswers, setCheckedAnswers] = useState({});
+  const [showPrompt, setShowPrompt] = useState(false);
   const puzzleRef = useRef(null);
   const inputRefs = useRef({});
 
@@ -256,19 +258,32 @@ export default function App() {
     const key = `${wordIndex}-${letterIndex}`;
     setUserAnswers({ ...userAnswers, [key]: value.toUpperCase() });
 
-    // Auto-focus next cell
+    // Auto-focus next editable cell
     if (value) {
-      const nextCol = colIdx + 1;
-      const nextRow = rowIdx;
-      const nextKey = `${nextRow}-${nextCol}`;
+      // Find next editable cell
+      let found = false;
       
-      if (inputRefs.current[nextKey]) {
-        inputRefs.current[nextKey].focus();
-      } else {
-        // Try next row
-        const nextRowKey = `${nextRow + 1}-0`;
-        if (inputRefs.current[nextRowKey]) {
-          inputRefs.current[nextRowKey].focus();
+      // Try cells to the right first
+      for (let c = colIdx + 1; c < puzzle.grid[0].length && !found; c++) {
+        const cellKey = `${rowIdx}-${c}`;
+        if (inputRefs.current[cellKey] && puzzle.grid[rowIdx][c] !== null) {
+          inputRefs.current[cellKey].focus();
+          found = true;
+          break;
+        }
+      }
+      
+      // If not found, try next rows
+      if (!found) {
+        for (let r = rowIdx + 1; r < puzzle.grid.length && !found; r++) {
+          for (let c = 0; c < puzzle.grid[0].length && !found; c++) {
+            const cellKey = `${r}-${c}`;
+            if (inputRefs.current[cellKey] && puzzle.grid[r][c] !== null) {
+              inputRefs.current[cellKey].focus();
+              found = true;
+              break;
+            }
+          }
         }
       }
     }
@@ -310,18 +325,29 @@ export default function App() {
   const checkAnswers = () => {
     let correct = 0;
     let total = 0;
+    const newChecked = {};
 
     puzzle.words.forEach((word, wIdx) => {
       for (let i = 0; i < word.word.length; i++) {
         total++;
         const key = `${wIdx}-${i}`;
-        if (userAnswers[key] === word.word[i]) {
+        const isCorrect = userAnswers[key] === word.word[i];
+        if (isCorrect) {
           correct++;
         }
+        newChecked[key] = isCorrect;
       }
     });
 
-    alert(`${correct} von ${total} Buchstaben richtig! ${correct === total ? '🎉 Perfekt!' : ''}`);
+    setCheckedAnswers(newChecked);
+    
+    setTimeout(() => {
+      alert(`${correct} von ${total} Buchstaben richtig! ${correct === total ? '🎉 Perfekt!' : ''}`);
+    }, 100);
+  };
+
+  const resetCheck = () => {
+    setCheckedAnswers({});
   };
 
   const generateShareLink = () => {
@@ -396,6 +422,14 @@ export default function App() {
             <div className="flex justify-between items-center mb-8">
               <h1 className="text-3xl font-bold text-gray-800">Kreuzworträtsel</h1>
               <div className="flex gap-2 flex-wrap">
+                {Object.keys(checkedAnswers).length > 0 && (
+                  <button
+                    onClick={resetCheck}
+                    className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg"
+                  >
+                    Markierung zurücksetzen
+                  </button>
+                )}
                 <button
                   onClick={checkAnswers}
                   className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
@@ -483,7 +517,13 @@ export default function App() {
                                 value={userAnswers[key] || ''}
                                 onChange={(e) => handleCellChange(wordIndex, letterIndex, rowIdx, colIdx, e.target.value)}
                                 onKeyDown={(e) => handleKeyDown(e, rowIdx, colIdx)}
-                                className="w-full h-full text-center font-bold text-lg uppercase border-none outline-none focus:bg-blue-50 focus:ring-2 focus:ring-blue-400"
+                                className={`w-full h-full text-center font-bold text-lg uppercase border-none outline-none focus:ring-2 focus:ring-blue-400 ${
+                                  checkedAnswers[key] === true 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : checkedAnswers[key] === false 
+                                    ? 'bg-red-100 text-red-800' 
+                                    : 'focus:bg-blue-50'
+                                }`}
                               />
                             )}
                           </div>
@@ -625,7 +665,71 @@ export default function App() {
               <li>• Wörter sollten mindestens 2 Buchstaben lang sein</li>
               <li>• Beim Lösen: Nutze Pfeiltasten zur Navigation</li>
               <li>• Exportiere als PDF oder Bild für Word/Druck</li>
+              <li>• Bei "Prüfen" werden richtige Antworten grün, falsche rot markiert</li>
             </ul>
+          </div>
+
+          {/* AI Prompt Template */}
+          <div className="mt-6">
+            <button
+              onClick={() => setShowPrompt(!showPrompt)}
+              className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-4 py-2 rounded-lg mb-3 flex items-center gap-2"
+            >
+              <FileText className="w-4 h-4" />
+              {showPrompt ? 'KI-Prompt ausblenden' : 'KI-Prompt anzeigen'}
+            </button>
+
+            {showPrompt && (
+              <div className="bg-gradient-to-br from-purple-50 to-blue-50 p-4 rounded-lg border-2 border-purple-200">
+                <h3 className="font-bold text-purple-900 mb-2">🤖 Prompt für ChatGPT/Claude:</h3>
+                <p className="text-sm text-gray-700 mb-3">
+                  Kopiere diesen Text und füge ihn in ChatGPT oder Claude ein, um automatisch Wörter und Hinweise zu generieren:
+                </p>
+                <div className="bg-white p-4 rounded border border-purple-200 font-mono text-sm mb-3 max-h-64 overflow-y-auto">
+                  <pre className="whitespace-pre-wrap text-gray-800">
+{`Erstelle mir 10-15 Wörter mit Hinweisen für ein Kreuzworträtsel zum Thema: [DEIN THEMA]
+
+Format: WORT1, Hinweis 1, WORT2, Hinweis 2, WORT3, Hinweis 3, ...
+
+Regeln:
+- Wörter sollten zwischen 3-12 Buchstaben lang sein
+- Hinweise sollten klar aber nicht zu einfach sein
+- Verwende nur Großbuchstaben für die Wörter
+- Keine Umlaute (ä→AE, ö→OE, ü→UE, ß→SS)
+- Achte darauf, dass Wörter gemeinsame Buchstaben haben können
+
+Beispiel:
+KATZE, Haustier mit vier Pfoten, HUND, Bester Freund des Menschen, VOGEL, Kann fliegen, FISCH, Lebt im Wasser, HAMSTER, Kleines Nagetier als Haustier
+
+Thema: [DEIN THEMA HIER EINFÜGEN]`}
+                  </pre>
+                </div>
+                <button
+                  onClick={() => {
+                    const promptText = `Erstelle mir 10-15 Wörter mit Hinweisen für ein Kreuzworträtsel zum Thema: [DEIN THEMA]
+
+Format: WORT1, Hinweis 1, WORT2, Hinweis 2, WORT3, Hinweis 3, ...
+
+Regeln:
+- Wörter sollten zwischen 3-12 Buchstaben lang sein
+- Hinweise sollten klar aber nicht zu einfach sein
+- Verwende nur Großbuchstaben für die Wörter
+- Keine Umlaute (ä→AE, ö→OE, ü→UE, ß→SS)
+- Achte darauf, dass Wörter gemeinsame Buchstaben haben können
+
+Beispiel:
+KATZE, Haustier mit vier Pfoten, HUND, Bester Freund des Menschen, VOGEL, Kann fliegen, FISCH, Lebt im Wasser, HAMSTER, Kleines Nagetier als Haustier
+
+Thema: [DEIN THEMA HIER EINFÜGEN]`;
+                    navigator.clipboard.writeText(promptText);
+                    alert('Prompt in die Zwischenablage kopiert! 📋');
+                  }}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-semibold"
+                >
+                  📋 Prompt kopieren
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
