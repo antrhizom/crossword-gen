@@ -281,32 +281,26 @@ export default function App() {
     const key = `${wordIndex}-${letterIndex}`;
     setUserAnswers({ ...userAnswers, [key]: value.toUpperCase() });
 
-    // Auto-focus next editable cell
-    if (value) {
-      // Find next editable cell
-      let found = false;
+    // Auto-focus next cell within the SAME WORD
+    if (value && wordIndex >= 0) {
+      const currentWord = puzzle.words[wordIndex];
+      const nextLetterIndex = letterIndex + 1;
       
-      // Try cells to the right first
-      for (let c = colIdx + 1; c < puzzle.grid[0].length && !found; c++) {
-        const cellKey = `${rowIdx}-${c}`;
-        if (inputRefs.current[cellKey] && puzzle.grid[rowIdx][c] !== null) {
-          inputRefs.current[cellKey].focus();
-          found = true;
-          break;
+      // Check if there's a next letter in this word
+      if (nextLetterIndex < currentWord.word.length) {
+        let nextRow, nextCol;
+        
+        if (currentWord.direction === 'across') {
+          nextRow = currentWord.row;
+          nextCol = currentWord.col + nextLetterIndex;
+        } else {
+          nextRow = currentWord.row + nextLetterIndex;
+          nextCol = currentWord.col;
         }
-      }
-      
-      // If not found, try next rows
-      if (!found) {
-        for (let r = rowIdx + 1; r < puzzle.grid.length && !found; r++) {
-          for (let c = 0; c < puzzle.grid[0].length && !found; c++) {
-            const cellKey = `${r}-${c}`;
-            if (inputRefs.current[cellKey] && puzzle.grid[r][c] !== null) {
-              inputRefs.current[cellKey].focus();
-              found = true;
-              break;
-            }
-          }
+        
+        const nextCellKey = `${nextRow}-${nextCol}`;
+        if (inputRefs.current[nextCellKey]) {
+          inputRefs.current[nextCellKey].focus();
         }
       }
     }
@@ -315,6 +309,27 @@ export default function App() {
   const handleKeyDown = (e, rowIdx, colIdx) => {
     const currentKey = `${rowIdx}-${colIdx}`;
     let targetKey = null;
+
+    // Tab: Switch to crossing word at intersection
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      
+      // Find all words at this position
+      const wordsAtPosition = puzzle.words.filter(w => 
+        (w.direction === 'across' && w.row === rowIdx && colIdx >= w.col && colIdx < w.col + w.word.length) ||
+        (w.direction === 'down' && w.col === colIdx && rowIdx >= w.row && rowIdx < w.row + w.word.length)
+      );
+      
+      if (wordsAtPosition.length > 1) {
+        // There's a crossing - stay on same cell but will use different word next time
+        const currentInput = inputRefs.current[currentKey];
+        if (currentInput) {
+          currentInput.blur();
+          setTimeout(() => currentInput.focus(), 0);
+        }
+      }
+      return;
+    }
 
     switch(e.key) {
       case 'ArrowRight':
@@ -334,7 +349,9 @@ export default function App() {
         targetKey = `${rowIdx - 1}-${colIdx}`;
         break;
       case 'Backspace':
-        if (!userAnswers[`${rowIdx}-${colIdx}`]) {
+        const currentInput = inputRefs.current[currentKey];
+        if (!currentInput?.value) {
+          e.preventDefault();
           targetKey = `${rowIdx}-${colIdx - 1}`;
         }
         break;
@@ -585,11 +602,17 @@ export default function App() {
                         const wordStart = puzzle.words.find(
                           w => w.row === rowIdx && w.col === colIdx
                         );
-                        const wordIndex = puzzle.words.findIndex(
-                          w => w.row === rowIdx && w.col === colIdx ||
-                             (w.direction === 'across' && w.row === rowIdx && colIdx >= w.col && colIdx < w.col + w.word.length) ||
-                             (w.direction === 'down' && w.col === colIdx && rowIdx >= w.row && rowIdx < w.row + w.word.length)
-                        );
+                        
+                        // Find which word this cell belongs to (prioritize word that starts here)
+                        let wordIndex = -1;
+                        if (wordStart) {
+                          wordIndex = puzzle.words.findIndex(w => w === wordStart);
+                        } else {
+                          wordIndex = puzzle.words.findIndex(
+                            w => (w.direction === 'across' && w.row === rowIdx && colIdx >= w.col && colIdx < w.col + w.word.length) ||
+                                 (w.direction === 'down' && w.col === colIdx && rowIdx >= w.row && rowIdx < w.row + w.word.length)
+                          );
+                        }
                         
                         let letterIndex = -1;
                         if (wordIndex >= 0) {
@@ -770,7 +793,9 @@ export default function App() {
             <ul className="text-sm text-blue-800 space-y-1">
               <li>• Nutze "Mehrere Wörter auf einmal" für schnelle Eingabe</li>
               <li>• Wörter sollten mindestens 2 Buchstaben lang sein</li>
-              <li>• Beim Lösen: Nutze Pfeiltasten zur Navigation</li>
+              <li>• Beim Lösen: Einfach tippen - springt automatisch zum nächsten Buchstaben im Wort</li>
+              <li>• <strong>Tab-Taste</strong>: Wechselt zwischen waagerecht/senkrecht bei Kreuzungen</li>
+              <li>• Pfeiltasten für manuelle Navigation</li>
               <li>• Exportiere als PDF oder Bild für Word/Druck</li>
               <li>• Bei "Prüfen" werden richtige Antworten grün, falsche rot markiert</li>
             </ul>
