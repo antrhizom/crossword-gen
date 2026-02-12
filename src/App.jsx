@@ -11,6 +11,8 @@ export default function App() {
   const [shareLink, setShareLink] = useState('');
   const [checkedAnswers, setCheckedAnswers] = useState({});
   const [showPrompt, setShowPrompt] = useState(false);
+  const [activeDirection, setActiveDirection] = useState('across'); // Track if user is filling across or down
+  const [activeCell, setActiveCell] = useState(null); // {row, col}
   const puzzleRef = useRef(null);
   const inputRefs = useRef({});
 
@@ -281,27 +283,61 @@ export default function App() {
     const key = `${wordIndex}-${letterIndex}`;
     setUserAnswers({ ...userAnswers, [key]: value.toUpperCase() });
 
-    // Auto-focus next cell within the SAME WORD
-    if (value && wordIndex >= 0) {
-      const currentWord = puzzle.words[wordIndex];
-      const nextLetterIndex = letterIndex + 1;
+    // Auto-focus next cell in ACTIVE DIRECTION
+    if (value) {
+      // Find the word in the active direction
+      const wordsAtPosition = puzzle.words.filter(w => 
+        (w.direction === 'across' && w.row === rowIdx && colIdx >= w.col && colIdx < w.col + w.word.length) ||
+        (w.direction === 'down' && w.col === colIdx && rowIdx >= w.row && rowIdx < w.row + w.word.length)
+      );
       
-      // Check if there's a next letter in this word
-      if (nextLetterIndex < currentWord.word.length) {
-        let nextRow, nextCol;
+      const activeWord = wordsAtPosition.find(w => w.direction === activeDirection);
+      
+      if (activeWord) {
+        const currentLetterIndex = activeDirection === 'across' 
+          ? colIdx - activeWord.col 
+          : rowIdx - activeWord.row;
+        const nextLetterIndex = currentLetterIndex + 1;
         
-        if (currentWord.direction === 'across') {
-          nextRow = currentWord.row;
-          nextCol = currentWord.col + nextLetterIndex;
-        } else {
-          nextRow = currentWord.row + nextLetterIndex;
-          nextCol = currentWord.col;
+        if (nextLetterIndex < activeWord.word.length) {
+          let nextRow, nextCol;
+          
+          if (activeDirection === 'across') {
+            nextRow = activeWord.row;
+            nextCol = activeWord.col + nextLetterIndex;
+          } else {
+            nextRow = activeWord.row + nextLetterIndex;
+            nextCol = activeWord.col;
+          }
+          
+          const nextCellKey = `${nextRow}-${nextCol}`;
+          if (inputRefs.current[nextCellKey]) {
+            inputRefs.current[nextCellKey].focus();
+            setActiveCell({ row: nextRow, col: nextCol });
+          }
         }
-        
-        const nextCellKey = `${nextRow}-${nextCol}`;
-        if (inputRefs.current[nextCellKey]) {
-          inputRefs.current[nextCellKey].focus();
-        }
+      }
+    }
+  };
+
+  const handleCellFocus = (rowIdx, colIdx) => {
+    setActiveCell({ row: rowIdx, col: colIdx });
+    
+    // Set direction based on available words at this position
+    const wordsAtPosition = puzzle.words.filter(w => 
+      (w.direction === 'across' && w.row === rowIdx && colIdx >= w.col && colIdx < w.col + w.word.length) ||
+      (w.direction === 'down' && w.col === colIdx && rowIdx >= w.row && rowIdx < w.row + w.word.length)
+    );
+    
+    // If there's only one word, use that direction
+    if (wordsAtPosition.length === 1) {
+      setActiveDirection(wordsAtPosition[0].direction);
+    }
+    // If there are multiple words, keep current direction if valid, otherwise switch
+    else if (wordsAtPosition.length > 1) {
+      const hasActiveDirection = wordsAtPosition.some(w => w.direction === activeDirection);
+      if (!hasActiveDirection) {
+        setActiveDirection(wordsAtPosition[0].direction);
       }
     }
   };
@@ -310,7 +346,7 @@ export default function App() {
     const currentKey = `${rowIdx}-${colIdx}`;
     let targetKey = null;
 
-    // Tab: Switch to crossing word at intersection
+    // Tab: Switch direction at intersection
     if (e.key === 'Tab') {
       e.preventDefault();
       
@@ -321,38 +357,39 @@ export default function App() {
       );
       
       if (wordsAtPosition.length > 1) {
-        // There's a crossing - stay on same cell but will use different word next time
-        const currentInput = inputRefs.current[currentKey];
-        if (currentInput) {
-          currentInput.blur();
-          setTimeout(() => currentInput.focus(), 0);
-        }
+        // Toggle direction
+        setActiveDirection(activeDirection === 'across' ? 'down' : 'across');
       }
       return;
     }
 
     switch(e.key) {
       case 'ArrowRight':
-        e.preventDefault();
-        targetKey = `${rowIdx}-${colIdx + 1}`;
-        break;
       case 'ArrowLeft':
         e.preventDefault();
-        targetKey = `${rowIdx}-${colIdx - 1}`;
+        setActiveDirection('across');
+        targetKey = e.key === 'ArrowRight' 
+          ? `${rowIdx}-${colIdx + 1}` 
+          : `${rowIdx}-${colIdx - 1}`;
         break;
       case 'ArrowDown':
-        e.preventDefault();
-        targetKey = `${rowIdx + 1}-${colIdx}`;
-        break;
       case 'ArrowUp':
         e.preventDefault();
-        targetKey = `${rowIdx - 1}-${colIdx}`;
+        setActiveDirection('down');
+        targetKey = e.key === 'ArrowDown' 
+          ? `${rowIdx + 1}-${colIdx}` 
+          : `${rowIdx - 1}-${colIdx}`;
         break;
       case 'Backspace':
         const currentInput = inputRefs.current[currentKey];
         if (!currentInput?.value) {
           e.preventDefault();
-          targetKey = `${rowIdx}-${colIdx - 1}`;
+          // Move back in active direction
+          if (activeDirection === 'across') {
+            targetKey = `${rowIdx}-${colIdx - 1}`;
+          } else {
+            targetKey = `${rowIdx - 1}-${colIdx}`;
+          }
         }
         break;
     }
@@ -594,6 +631,18 @@ export default function App() {
             <div className="grid md:grid-cols-2 gap-8">
               {/* Crossword Grid */}
               <div className="overflow-auto">
+                {/* Direction Indicator */}
+                <div className="mb-4 flex items-center gap-2 text-sm">
+                  <span className="font-semibold">Richtung:</span>
+                  <div className={`px-3 py-1 rounded ${activeDirection === 'across' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                    ← Waagerecht →
+                  </div>
+                  <div className={`px-3 py-1 rounded ${activeDirection === 'down' ? 'bg-purple-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                    ↓ Senkrecht ↓
+                  </div>
+                  <span className="text-xs text-gray-500">(Tab zum Wechseln)</span>
+                </div>
+                
                 <div className="inline-block">
                   {puzzle.grid.map((row, rowIdx) => (
                     <div key={rowIdx} className="flex">
@@ -646,8 +695,15 @@ export default function App() {
                                 maxLength={1}
                                 value={userAnswers[key] || ''}
                                 onChange={(e) => handleCellChange(wordIndex, letterIndex, rowIdx, colIdx, e.target.value)}
+                                onFocus={() => handleCellFocus(rowIdx, colIdx)}
                                 onKeyDown={(e) => handleKeyDown(e, rowIdx, colIdx)}
-                                className={`w-full h-full text-center font-bold text-lg uppercase border-none outline-none focus:ring-2 focus:ring-blue-400 ${
+                                className={`w-full h-full text-center font-bold text-lg uppercase border-none outline-none focus:ring-2 ${
+                                  activeCell?.row === rowIdx && activeCell?.col === colIdx
+                                    ? activeDirection === 'across' 
+                                      ? 'focus:ring-blue-500 focus:ring-4' 
+                                      : 'focus:ring-purple-500 focus:ring-4'
+                                    : 'focus:ring-blue-400'
+                                } ${
                                   checkedAnswers[key] === true 
                                     ? 'bg-green-100 text-green-800' 
                                     : checkedAnswers[key] === false 
@@ -793,9 +849,10 @@ export default function App() {
             <ul className="text-sm text-blue-800 space-y-1">
               <li>• Nutze "Mehrere Wörter auf einmal" für schnelle Eingabe</li>
               <li>• Wörter sollten mindestens 2 Buchstaben lang sein</li>
-              <li>• Beim Lösen: Einfach tippen - springt automatisch zum nächsten Buchstaben im Wort</li>
-              <li>• <strong>Tab-Taste</strong>: Wechselt zwischen waagerecht/senkrecht bei Kreuzungen</li>
-              <li>• Pfeiltasten für manuelle Navigation</li>
+              <li>• <strong>Beim Lösen:</strong> Einfach tippen - bleibt automatisch in der aktiven Richtung</li>
+              <li>• <strong>Tab-Taste</strong>: Wechselt zwischen ← Waagerecht und ↓ Senkrecht</li>
+              <li>• <strong>Pfeiltasten</strong>: ←→ für waagerecht, ↑↓ für senkrecht (wechselt automatisch Richtung)</li>
+              <li>• <strong>Farbring:</strong> Blau = waagerecht aktiv, Lila = senkrecht aktiv</li>
               <li>• Exportiere als PDF oder Bild für Word/Druck</li>
               <li>• Bei "Prüfen" werden richtige Antworten grün, falsche rot markiert</li>
             </ul>
