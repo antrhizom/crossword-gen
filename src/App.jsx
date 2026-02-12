@@ -385,20 +385,29 @@ export default function App() {
     if (!puzzleRef.current) return;
 
     try {
-      // Dynamically import html2canvas
       const html2canvas = (await import('html2canvas')).default;
       
-      const canvas = await html2canvas(puzzleRef.current, {
+      // Create a print-optimized version
+      const printDiv = document.createElement('div');
+      printDiv.style.cssText = 'position: absolute; left: -9999px; background: white; padding: 40px;';
+      printDiv.innerHTML = createPrintLayout();
+      document.body.appendChild(printDiv);
+      
+      const canvas = await html2canvas(printDiv, {
         backgroundColor: '#ffffff',
-        scale: 2
+        scale: 2,
+        logging: false
       });
+      
+      document.body.removeChild(printDiv);
       
       const link = document.createElement('a');
       link.download = 'kreuzwortraetsel.png';
       link.href = canvas.toDataURL();
       link.click();
     } catch (error) {
-      alert('Fehler beim Exportieren. Bitte installiere html2canvas: npm install html2canvas');
+      console.error('Export error:', error);
+      alert('Fehler beim Exportieren. Stelle sicher, dass html2canvas installiert ist.');
     }
   };
 
@@ -406,27 +415,95 @@ export default function App() {
     if (!puzzleRef.current) return;
 
     try {
-      // Dynamically import html2canvas and jspdf
       const html2canvas = (await import('html2canvas')).default;
       const { jsPDF } = await import('jspdf');
       
-      const canvas = await html2canvas(puzzleRef.current, {
+      // Create a print-optimized version
+      const printDiv = document.createElement('div');
+      printDiv.style.cssText = 'position: absolute; left: -9999px; background: white; padding: 40px; width: 1200px;';
+      printDiv.innerHTML = createPrintLayout();
+      document.body.appendChild(printDiv);
+      
+      const canvas = await html2canvas(printDiv, {
         backgroundColor: '#ffffff',
-        scale: 2
+        scale: 2,
+        logging: false
       });
+      
+      document.body.removeChild(printDiv);
       
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
-        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
-        unit: 'px',
-        format: [canvas.width, canvas.height]
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
       });
       
-      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      const imgX = (pdfWidth - imgWidth * ratio) / 2;
+      const imgY = 10;
+      
+      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
       pdf.save('kreuzwortraetsel.pdf');
     } catch (error) {
-      alert('Fehler beim Exportieren. Bitte installiere: npm install html2canvas jspdf');
+      console.error('Export error:', error);
+      alert('Fehler beim Exportieren. Stelle sicher, dass html2canvas und jspdf installiert sind.');
     }
+  };
+
+  const createPrintLayout = () => {
+    const gridSize = puzzle.grid.length > 15 ? 25 : 35;
+    
+    return `
+      <div style="font-family: Arial, sans-serif; max-width: 1200px;">
+        <h1 style="text-align: center; margin-bottom: 30px; font-size: 28px;">Kreuzworträtsel</h1>
+        
+        <div style="display: flex; gap: 40px; align-items: flex-start;">
+          <!-- Grid -->
+          <div style="flex-shrink: 0;">
+            ${puzzle.grid.map((row, rowIdx) => `
+              <div style="display: flex;">
+                ${row.map((cell, colIdx) => {
+                  const wordStart = puzzle.words.find(w => w.row === rowIdx && w.col === colIdx);
+                  return `
+                    <div style="
+                      width: ${gridSize}px; 
+                      height: ${gridSize}px; 
+                      border: 1px solid #333; 
+                      position: relative;
+                      background: ${cell === null ? '#000' : '#fff'};
+                    ">
+                      ${wordStart ? `<span style="position: absolute; top: 1px; left: 2px; font-size: 8px; font-weight: bold;">${wordStart.number}</span>` : ''}
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `).join('')}
+          </div>
+          
+          <!-- Clues -->
+          <div style="flex: 1; font-size: 12px; line-height: 1.6;">
+            <div style="margin-bottom: 20px;">
+              <h2 style="font-size: 16px; font-weight: bold; margin-bottom: 10px;">Waagerecht</h2>
+              ${puzzle.words.filter(w => w.direction === 'across').map(word => 
+                `<div style="margin-bottom: 6px;"><strong>${word.number}.</strong> ${word.clue}</div>`
+              ).join('')}
+            </div>
+            
+            <div>
+              <h2 style="font-size: 16px; font-weight: bold; margin-bottom: 10px;">Senkrecht</h2>
+              ${puzzle.words.filter(w => w.direction === 'down').map(word => 
+                `<div style="margin-bottom: 6px;"><strong>${word.number}.</strong> ${word.clue}</div>`
+              ).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
   };
 
   const resetToCreate = () => {
